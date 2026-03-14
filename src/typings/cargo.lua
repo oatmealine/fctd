@@ -1,0 +1,8 @@
+---@meta
+---@alias CargoAssets { sprites: table<string, CargoSprites>, shaders: CargoShaders, sfx: CargoSounds, bgm: CargoMusic, dialog: CargoDialog }
+-- ---@alias CargoSprites table<string, CargoSprites | love.Image>
+---@alias CargoSprites table<string, any>
+---@alias CargoShaders table<string, love.Shader>
+---@alias CargoSounds table<string, table<string, SoundPool>>
+---@alias CargoMusic table<string, love.Source>
+---@alias CargoDialog table<string, any>
