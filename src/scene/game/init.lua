@@ -12,7 +12,7 @@ local ZOOM = 3
 
 game.transform = love.math.newTransform()
 
-local uiContainer = jillo.RelativeContainer:new()
+local uiContainer = jillo.RelativeContainer:new(0, 0)
 
 ---@type Tile?
 local placing
