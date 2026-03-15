@@ -1,32 +1,285 @@
+local jillo = require 'lib.jillo'
+local Rotatable = require 'src.scene.game.tiles.Rotatable'
+jillo.shouldScissor = false -- for shame
+local class = require 'lib.lowerclass'
+local Conveyor = require 'src.scene.game.tiles.Conveyor'
+
 ---@class GameScene : Scene
 local game = {}
 
+local SCALE = 32
+local ZOOM = 3
+
+game.transform = love.math.newTransform()
+
+local uiContainer = jillo.RelativeContainer:new()
+
+---@type Tile?
+local placing
+local placingAngle = 0
+
+local placables = jillo.Container:new(0, 64, 0, 0.5, jillo.Direction.Right, 16)
+
+---@class Placable : Element
+local Placable = class('Placable', jillo.Element)
+
+function Placable:getWidth() return 64 end
+function Placable:getHeight() return 64 end
+---@param thing Tile
+function Placable:__init(thing)
+  self.thing = thing
+end
+function Placable:onClicked()
+  placing = self.thing
+  return true
+end
+function Placable:draw(x, y)
+  love.graphics.push()
+  love.graphics.translate(x, y)
+  love.graphics.setColor(1, 1, 1, self.hover and 1 or 0.5)
+  love.graphics.rectangle('line', -self:getWidth()/2, -self:getHeight()/2, self:getWidth(), self:getHeight())
+  love.graphics.setColor(1, 1, 1, 1)
+  love.graphics.print('$' .. formatNum(self.thing.getCost()), -self:getWidth()/2, self:getHeight()/2 - 14)
+
+  self.thing.drawHUD()
+  love.graphics.pop()
+end
+
+placables:add(Placable:new(Conveyor))
+
+uiContainer:add(placables, jillo.Anchor.BottomLeft, 16, -48)
+
+---@class GameState
+game.state = {
+  money = 0,
+}
+local defaultState = deepcopy(game.state)
+
+local TRANSITION_TILES = 3
+
+---@type table<number, table<number, Tile>>
+local map = {}
+
+---@param x number
+---@param y number
+---@overload fun(pos: vector2D): Tile
+---@return Tile
+local function getTile(x, y)
+  if type(x) == 'cdata' then
+    local vec = x
+    x, y = round(vec.x), round(vec.y)
+  end
+  return map[x] and map[x][y]
+end
+game.getTile = getTile
+---@param x number
+---@param y number
+---@param tile Tile
+---@overload fun(pos: vector2D, tile: Tile): Tile
+local function setTile(x, y, tile)
+  if type(x) == 'cdata' then
+    local vec = x
+    x, y = round(vec.x), round(vec.y)
+  end
+  map[x] = map[x] or {}
+  map[x][y] = tile
+end
+game.setTile = setTile
+
+local function isValidPlacement(tile, x, y)
+  if x < -game.mapWidth then return false end
+  if x > game.mapWidth then return false end
+  if y < -math.floor(game.mapHeight/2) then return false end
+  if y > math.ceil(game.mapHeight/2) then return false end
+
+  local spot = getTile(x, y)
+
+  return spot == nil or spot:is(tile)
+end
+
+local function updateTransform()
+  game.transform:reset()
+  game.transform:translate(sw/2, sh/2)
+  game.transform:scale(SCALE * ZOOM)
+  if game.mapHeight % 2 == 0 then
+    game.transform:translate(0, -0.5)
+  end
+end
+
 function game.init()
+  game.state = deepcopy(defaultState)
+  game.state.money = game.state.money + 10000
+  state = game.state
+
+  map = {}
+
+  placing = nil
+  placingAngle = 0
+
+  game.mapWidth = 12 * 2 -- both sides
+  game.mapHeight = 6
+
+  setTile(-5, 0, Conveyor:new(1))
+  setTile(-4, 0, Conveyor:new(1))
+  setTile(-3, 0, Conveyor:new(2))
+  setTile(-3, 1, Conveyor:new(1))
+  setTile(-2, 1, Conveyor:new(1))
+
+  for x, row in pairs(map) do
+    for y, tile in pairs(row) do
+      tile:placed(x, y, tile.angle or 0)
+    end
+  end
+  for x, row in pairs(map) do
+    for y, tile in pairs(row) do
+      tile:awake()
+    end
+  end
+
+  updateTransform()
 end
 
 game.callbacks = {}
 function game.callbacks.update(dt)
+  uiContainer:update(dt)
+
+  for x, row in pairs(map) do
+    for y, tile in pairs(row) do
+      tile:update(dt)
+    end
+  end
+
+  updateTransform()
 end
- 
+
+local function drawWorld()
+  love.graphics.push()
+  love.graphics.applyTransform(game.transform)
+
+  for x = -game.mapWidth, game.mapWidth do
+    for y = -math.floor(game.mapHeight/2), math.ceil(game.mapHeight/2) do
+      love.graphics.push()
+
+      love.graphics.translate(x, y)
+      love.graphics.scale(1 / (SCALE))
+
+      love.graphics.setColor(1, 1, 1, 0.3)
+      love.graphics.line(0, 0, SCALE, 0)
+      love.graphics.line(0, 0, 0, SCALE)
+
+      love.graphics.print(x .. ', ' .. y)
+
+      local tile = getTile(x, y)
+      if tile then
+        tile:draw()
+      end
+
+      love.graphics.pop()
+    end
+  end
+
+  if placing then
+    local mx, my = game.transform:inverseTransformPoint(love.mouse.getPosition())
+    local x, y = math.floor(mx), math.floor(my)
+
+    love.graphics.push()
+
+    love.graphics.translate(x, y)
+    love.graphics.scale(1 / (SCALE))
+
+    placing.drawPreview(placingAngle, isValidPlacement(placing, x, y))
+
+    if placing:is(Rotatable) then
+      love.graphics.setColor(1, 1, 1, 1)
+      love.graphics.printf('Q', -16, -16, 16, 'right')
+      love.graphics.printf('E', SCALE, -16, 16, 'left')
+    end
+
+    love.graphics.pop()
+  end
+
+  love.graphics.pop()
+end
+
+local function drawUI()
+  love.graphics.setColor(1, 1, 1)
+
+  -- lazy font size
+  love.graphics.push()
+  love.graphics.translate(8, sh - 8)
+  love.graphics.scale(1.5)
+
+  love.graphics.print('$' .. formatNum(state.money), 0, -16)
+  love.graphics.pop()
+
+  placables:setWidth(sw - 32)
+  uiContainer:setDimensions(sw, sh)
+  uiContainer:draw(sw/2, sh/2, 1)
+end
+
 function game.callbacks.draw()
   sw, sh = love.graphics.getWidth(), love.graphics.getHeight()
 
-  love.graphics.print('freddy fazbear', sw/2 + math.sin(love.timer.getTime()) * sw/2)
+  drawWorld()
+  drawUI()
 end
 
 function game.callbacks.mousepressed(x, y, button)
-end
+  if uiContainer:onClicked(x - sw/2, y - sh/2, button) then return end
 
+  if placing then
+    local mx, my = game.transform:inverseTransformPoint(x, y)
+    local x, y = math.floor(mx), math.floor(my)
+
+    if isValidPlacement(placing, x, y) then
+      local newTile = placing:new()
+      local oldTile = getTile(x, y)
+      local shouldChargeCost = oldTile == nil or (not oldTile:is(placing))
+      local hasFunds = true
+
+      if shouldChargeCost then
+        hasFunds = state.money >= placing.getCost()
+        if hasFunds then
+          state.money = state.money - placing.getCost()
+        end
+      end
+
+      if hasFunds then
+        setTile(x, y, newTile)
+        newTile:placed(x, y, placingAngle)
+        newTile:awake()
+      end
+    end
+  end
+end
 function game.callbacks.mousereleased(x, y, button)
+  if uiContainer:onRelease(x - sw/2, y - sh/2, button) then return end
+end
+function game.callbacks.mousemoved(x, y)
+  if uiContainer:onMouse(x - sw/2, y - sh/2, true) then return end
 end
 
 function game.callbacks.wheelmoved(x, y)
 end
 
+---@param key love.KeyConstant
+---@param code love.Scancode
 function game.callbacks.keypressed(key, code)
+  if code == 'q' then
+    placingAngle = placingAngle - 1
+    if placingAngle < 0 then
+      placingAngle = 3
+    end
+  end
+  if code == 'e' then
+    placingAngle = placingAngle + 1
+    if placingAngle > 3 then
+      placingAngle = 0
+    end
+  end
 end
 
-function game.callbacks.resize(w, h)
+function game.callbacks.resize()
 end
 
 return game

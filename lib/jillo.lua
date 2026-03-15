@@ -1,6 +1,6 @@
 -- from https://github.com/oatmealine/jadelib
 
-local Object = require 'lib.classic'
+local class = require 'lib.lowerclass'
 
 ---@generic T
 ---@param a T
@@ -23,11 +23,10 @@ M.Direction = {
   Left = 3
 }
 
----@class Element : Object
----@operator call(...): Element
-M.Element = Object:extend()
+---@class Element : Class
+M.Element = class('Element')
 
-function M.Element:new()
+function M.Element:__init()
   self.hover = false
   self.active = false
 end
@@ -98,8 +97,7 @@ function M.Element:onSelected(selected)
 end
 
 ---@class Container : Element
----@operator call(...): Container
-M.Container = M.Element:extend()
+M.Container = class('Container', M.Element)
 
 ---@param width number
 ---@param height number
@@ -107,7 +105,9 @@ M.Container = M.Element:extend()
 ---@param alignY number
 ---@param direction Direction?
 ---@param gap number?
-function M.Container:new(width, height, alignX, alignY, direction, gap)
+function M.Container:__init(width, height, alignX, alignY, direction, gap)
+  M.Element.__init(self)
+
   self.width = width
   self.height = height
 
@@ -205,12 +205,11 @@ end
 ---@param my number
 ---@param button number
 function M.Container:onClicked(mx, my, button)
-  M.Container.super.onClicked(self, mx, my, button)
+  M.Element.onClicked(self, mx, my, button)
   for _, element in ipairs(self.elements) do
     local x, y, w, h = unpack(self._positions[element] or {0, 0, 0, 0})
     if mx >= (x - w/2) and mx < (x + w/2) and my >= (y - h/2) and my < (y + h/2) then
-      element:onClicked(mx - x, my - y, button)
-      break
+      return element:onClicked(mx - x, my - y, button)
     end
   end
 end
@@ -219,7 +218,7 @@ end
 ---@param my number
 ---@param button number
 function M.Container:onRelease(mx, my, button)
-  M.Container.super.onRelease(self, mx, my, button)
+  M.Element.onRelease(self, mx, my, button)
   for _, element in ipairs(self.elements) do
     local x, y, w, h = unpack(self._positions[element] or {0, 0, 0, 0})
     if mx >= (x - w/2) and mx < (x + w/2) and my >= (y - h/2) and my < (y + h/2) then
@@ -233,7 +232,7 @@ end
 ---@param my number
 ---@param hover boolean
 function M.Container:onMouse(mx, my, hover)
-  M.Container.super.onMouse(self, mx, my, hover)
+  M.Element.onMouse(self, mx, my, hover)
   for _, element in ipairs(self.elements) do
     local x, y, w, h = unpack(self._positions[element] or {0, 0, 0, 0})
     element:onMouse(mx - x, my - y, hover and (mx >= (x - w/2) and mx < (x + w/2) and my >= (y - h/2) and my < (y + h/2)))
@@ -406,12 +405,13 @@ local function anchorToAlign(anchor)
 end
 
 ---@class RelativeContainer : Element
----@operator call(...): RelativeContainer
-M.RelativeContainer = M.Element:extend()
+M.RelativeContainer = class('RelativeContainer', M.Element)
 
 ---@param width number
 ---@param height number
-function M.RelativeContainer:new(width, height)
+function M.RelativeContainer:__init(width, height)
+  M.Element.__init(self)
+
   self.width = width
   self.height = height
 
@@ -479,7 +479,7 @@ end
 ---@param my number
 ---@param button number
 function M.RelativeContainer:onClicked(mx, my, button)
-  M.RelativeContainer.super.onClicked(self, mx, my, button)
+  M.Element.onClicked(self, mx, my, button)
   for _, element in ipairs(self.elements) do
     local x, y, w, h = unpack(self:getElementPosition(element))
     if mx >= (x - w/2) and mx < (x + w/2) and my >= (y - h/2) and my < (y + h/2) then
@@ -493,7 +493,7 @@ end
 ---@param my number
 ---@param button number
 function M.RelativeContainer:onRelease(mx, my, button)
-  M.RelativeContainer.super.onRelease(self, mx, my, button)
+  M.Element.onRelease(self, mx, my, button)
   for _, element in ipairs(self.elements) do
     local x, y, w, h = unpack(self:getElementPosition(element))
     if mx >= (x - w/2) and mx < (x + w/2) and my >= (y - h/2) and my < (y + h/2) then
@@ -507,7 +507,7 @@ end
 ---@param my number
 ---@param hover boolean
 function M.RelativeContainer:onMouse(mx, my, hover)
-  M.RelativeContainer.super.onMouse(self, mx, my, hover)
+  M.Element.onMouse(self, mx, my, hover)
   for _, element in ipairs(self.elements) do
     local x, y, w, h = unpack(self:getElementPosition(element))
     element.element:onMouse(mx - x, my - y, hover and (mx >= (x - w/2) and mx < (x + w/2) and my >= (y - h/2) and my < (y + h/2)))
@@ -553,12 +553,12 @@ function M.RelativeContainer:draw(containerX, containerY, alpha)
 end
 
 ---@class Sprite : Element
----@operator call(...): Element
-M.Sprite = M.Element:extend()
+M.Sprite = class('Sprite', M.Element)
 
 ---@param sprite love.Image
 ---@param scale number
-function M.Sprite:new(sprite, scale, offsetX, offsetY)
+function M.Sprite:__init(sprite, scale, offsetX, offsetY)
+  M.Element.__init(self)
   self.sprite = sprite
   self.scale = scale or 1
   self.offsetX = offsetX or 0
@@ -584,12 +584,12 @@ function M.Sprite:getHeight()
 end
 
 ---@class Rectangle : Element
----@operator call(...): Element
-M.Rectangle = M.Element:extend()
+M.Rectangle = class('Rectangle', M.Element)
 
 ---@param width number
 ---@param height number
 function M.Rectangle:new(width, height)
+  M.Element.__init(self)
   self.width = width
   self.height = height
 end

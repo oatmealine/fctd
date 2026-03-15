@@ -7,7 +7,7 @@ function love.conf(t)
   t.window.icon = nil
   t.window.width = 1200
   t.window.height = 800
-  t.window.resizable = true
+  t.window.resizable = false
   t.window.minwidth = 600
   t.window.minheight = 400
   t.window.depth = 16

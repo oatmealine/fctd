@@ -5,7 +5,7 @@ tweenable = require 'lib.tweenable'
 require 'lib.ease'
 require 'lib.utf8'
 log = require 'lib.log'
-require 'lib.vector2D'
+vector = require 'lib.vector2D'
 local audio = require 'src.audio'
 
 DEBUG = false
@@ -92,7 +92,7 @@ function love.draw()
   if DEBUG then
     love.graphics.setColor(1, 1, 1, 1)
     --love.graphics.setFont(fonts.main)
-    love.graphics.print(love.timer.getFPS() .. 'FPS', 0, sh - 16)
+    love.graphics.print(love.timer.getFPS() .. 'FPS', 0, 0)
   end
 
   save.draw()
