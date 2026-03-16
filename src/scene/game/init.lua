@@ -2,13 +2,21 @@ local jillo = require 'lib.jillo'
 local Rotatable = require 'src.scene.game.tiles.Rotatable'
 jillo.shouldScissor = false -- for shame
 local class = require 'lib.lowerclass'
-local Conveyor = require 'src.scene.game.tiles.Conveyor'
+local Conveyor = require 'src.scene.game.tiles.attack.Conveyor'
 
 ---@class GameScene : Scene
 local game = {}
 
 local SCALE = 32
 local ZOOM = 3
+
+---@enum GamePhase
+GamePhase = {
+  -- factory builder
+  Attack = 0,
+  -- tower defense
+  Defense = 1,
+}
 
 game.transform = love.math.newTransform()
 
@@ -52,45 +60,68 @@ uiContainer:add(placables, jillo.Anchor.BottomLeft, 16, -48)
 ---@class GameState
 game.state = {
   money = 0,
+  phase = GamePhase.Attack,
+  ---@type table<number, table<number, Tile>>
+  map = {},
 }
 local defaultState = deepcopy(game.state)
 
-local TRANSITION_TILES = 3
+local cameraX = easable(-1, 20)
 
----@type table<number, table<number, Tile>>
-local map = {}
+local TRANSITION_TILES = 3
 
 ---@param x number
 ---@param y number
 ---@overload fun(pos: vector2D): Tile
----@return Tile
+---@return Tile | nil
 local function getTile(x, y)
   if type(x) == 'cdata' then
     local vec = x
     x, y = round(vec.x), round(vec.y)
   end
-  return map[x] and map[x][y]
+  return game.state.map[x] and game.state.map[x][y]
 end
 game.getTile = getTile
 ---@param x number
 ---@param y number
----@param tile Tile
+---@param tile Tile | nil
 ---@overload fun(pos: vector2D, tile: Tile): Tile
 local function setTile(x, y, tile)
   if type(x) == 'cdata' then
     local vec = x
     x, y = round(vec.x), round(vec.y)
   end
-  map[x] = map[x] or {}
-  map[x][y] = tile
+  local oldTile = getTile(x, y)
+  game.state.map[x] = game.state.map[x] or {}
+  game.state.map[x][y] = tile
+  if oldTile then
+    oldTile:removed()
+  end
 end
 game.setTile = setTile
+
+local function getMapMiddle()
+  if TRANSITION_TILES % 2 == 1 then
+    return 1
+  end
+  return 0.5
+end
 
 local function isValidPlacement(tile, x, y)
   if x < -game.mapWidth then return false end
   if x > game.mapWidth then return false end
   if y < -math.floor(game.mapHeight/2) then return false end
   if y > math.ceil(game.mapHeight/2) then return false end
+
+  if game.state.phase == GamePhase.Attack then
+    if x > getMapMiddle() - TRANSITION_TILES/2 then
+      return false
+    end
+  elseif game.state.phase == GamePhase.Defense then
+    if x < getMapMiddle() + TRANSITION_TILES/2 then
+      return false
+    end
+  end
 
   local spot = getTile(x, y)
 
@@ -99,8 +130,9 @@ end
 
 local function updateTransform()
   game.transform:reset()
-  game.transform:translate(sw/2, sh/2)
+  game.transform:translate(mix(sw, 0, (cameraX.eased / 2 + 0.5)), sh/2)
   game.transform:scale(SCALE * ZOOM)
+  game.transform:translate(-(getMapMiddle() + 0.5), 0)
   if game.mapHeight % 2 == 0 then
     game.transform:translate(0, -0.5)
   end
@@ -119,35 +151,27 @@ function game.init()
   game.mapWidth = 12 * 2 -- both sides
   game.mapHeight = 6
 
-  setTile(-5, 0, Conveyor:new(1))
-  setTile(-4, 0, Conveyor:new(1))
-  setTile(-3, 0, Conveyor:new(2))
-  setTile(-3, 1, Conveyor:new(1))
-  setTile(-2, 1, Conveyor:new(1))
-
-  for x, row in pairs(map) do
-    for y, tile in pairs(row) do
-      tile:placed(x, y, tile.angle or 0)
-    end
-  end
-  for x, row in pairs(map) do
-    for y, tile in pairs(row) do
-      tile:awake()
-    end
-  end
-
   updateTransform()
 end
+
+local awakeQueue = {}
 
 game.callbacks = {}
 function game.callbacks.update(dt)
   uiContainer:update(dt)
 
-  for x, row in pairs(map) do
+  for _, tile in ipairs(awakeQueue) do
+    tile:awake()
+  end
+  awakeQueue = {}
+  for x, row in pairs(game.state.map) do
     for y, tile in pairs(row) do
       tile:update(dt)
     end
   end
+
+  cameraX.target = game.state.phase == GamePhase.Attack and -1 or 1
+  cameraX:update(dt)
 
   updateTransform()
 end
@@ -156,7 +180,11 @@ local function drawWorld()
   love.graphics.push()
   love.graphics.applyTransform(game.transform)
 
-  for x = -game.mapWidth, game.mapWidth do
+  local endX = game.mapWidth
+  if TRANSITION_TILES % 2 == 1 then
+    endX = endX + 1
+  end
+  for x = -game.mapWidth, endX do
     for y = -math.floor(game.mapHeight/2), math.ceil(game.mapHeight/2) do
       love.graphics.push()
 
@@ -187,7 +215,7 @@ local function drawWorld()
     love.graphics.translate(x, y)
     love.graphics.scale(1 / (SCALE))
 
-    placing.drawPreview(placingAngle, isValidPlacement(placing, x, y))
+    placing.drawPreview(x, y, placingAngle, isValidPlacement(placing, x, y))
 
     if placing:is(Rotatable) then
       love.graphics.setColor(1, 1, 1, 1)
@@ -197,6 +225,11 @@ local function drawWorld()
 
     love.graphics.pop()
   end
+
+  love.graphics.setColor(0.3, 1, 0.3)
+  love.graphics.setLineWidth(0.12)
+  love.graphics.line(getMapMiddle() + 0.5, -game.mapHeight, getMapMiddle() + 0.5, game.mapHeight)
+  love.graphics.setLineWidth(1)
 
   love.graphics.pop()
 end
@@ -262,6 +295,35 @@ end
 function game.callbacks.wheelmoved(x, y)
 end
 
+local function mirrorTiles()
+  for x, row in pairs(game.state.map) do
+    if x < getMapMiddle() then
+      for y, tile in pairs(row) do
+        local mirrored = tile:toMirrored()
+        if mirrored then
+          local mx, my = math.floor((getMapMiddle() + 1)) - x, y
+          setTile(mx, my, mirrored)
+          mirrored:placed(mx, my)
+          table.insert(awakeQueue, mirrored)
+        end
+      end
+    end
+  end
+end
+
+---@param phase GamePhase
+function game.setPhase(phase)
+  if game.state.phase == phase then return end
+
+  game.state.phase = phase
+
+  placing = nil
+
+  if phase == GamePhase.Defense then
+    mirrorTiles()
+  end
+end
+
 ---@param key love.KeyConstant
 ---@param code love.Scancode
 function game.callbacks.keypressed(key, code)
@@ -275,6 +337,11 @@ function game.callbacks.keypressed(key, code)
     placingAngle = placingAngle + 1
     if placingAngle > 3 then
       placingAngle = 0
+    end
+  end
+  if DEBUG then
+    if code == 'g' then
+      game.setPhase(1 - game.state.phase)
     end
   end
 end

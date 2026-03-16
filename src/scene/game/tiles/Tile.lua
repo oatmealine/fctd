@@ -24,16 +24,22 @@ end
 
 function Tile:placed(x, y, angle)
   self.pos = vector.new(x, y)
-  if self:is(Rotatable) then
+  if self:is(Rotatable) and angle then
     self.angle = angle
   end
 end
 function Tile:awake()
 end
+function Tile:removed()
+end
+
+---@return Tile | nil
+function Tile:toMirrored()
+end
 
 function Tile.drawHUD()
 end
-function Tile.drawPreview(angle, valid)
+function Tile.drawPreview(x, y, angle, valid)
 end
 function Tile:draw()
 end

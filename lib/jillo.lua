@@ -588,7 +588,7 @@ M.Rectangle = class('Rectangle', M.Element)
 
 ---@param width number
 ---@param height number
-function M.Rectangle:new(width, height)
+function M.Rectangle:__init(width, height)
   M.Element.__init(self)
   self.width = width
   self.height = height
