@@ -1,8 +1,11 @@
 local jillo = require 'lib.jillo'
-local Rotatable = require 'src.scene.game.tiles.Rotatable'
 jillo.shouldScissor = false -- for shame
 local class = require 'lib.lowerclass'
+
+local Rotatable = require 'src.scene.game.tiles.Rotatable'
 local Conveyor = require 'src.scene.game.tiles.attack.Conveyor'
+local Exit = require 'src.scene.game.tiles.special.Exit'
+local Wall = require 'src.scene.game.tiles.special.Wall'
 
 ---@class GameScene : Scene
 local game = {}
@@ -44,6 +47,8 @@ end
 function Placable:draw(x, y)
   love.graphics.push()
   love.graphics.translate(x, y)
+  love.graphics.setColor(0, 0, 0, 0.2)
+  love.graphics.rectangle('fill', -self:getWidth()/2, -self:getHeight()/2, self:getWidth(), self:getHeight())
   love.graphics.setColor(1, 1, 1, self.hover and 1 or 0.5)
   love.graphics.rectangle('line', -self:getWidth()/2, -self:getHeight()/2, self:getWidth(), self:getHeight())
   love.graphics.setColor(1, 1, 1, 1)
@@ -57,43 +62,70 @@ placables:add(Placable:new(Conveyor))
 
 uiContainer:add(placables, jillo.Anchor.BottomLeft, 16, -48)
 
+local roundUI = jillo.Sprite(assets.sprites.round_ui, 2)
+
+uiContainer:add(roundUI, jillo.Anchor.BottomRight, 0, 0)
+
 ---@class GameState
 game.state = {
   money = 0,
   phase = GamePhase.Attack,
-  ---@type table<number, table<number, Tile>>
+  ---@type table<number, table<number, table<number, Tile>>>
   map = {},
 }
 local defaultState = deepcopy(game.state)
 
 local cameraX = easable(-1, 20)
+local previewing = false
+
+local placeUIEase = easable(0, 20)
 
 local TRANSITION_TILES = 3
 
 ---@param x number
 ---@param y number
+---@param z number?
 ---@overload fun(pos: vector2D): Tile
 ---@return Tile | nil
-local function getTile(x, y)
+local function getTile(x, y, z)
   if type(x) == 'cdata' then
     local vec = x
+    z = y
     x, y = round(vec.x), round(vec.y)
   end
-  return game.state.map[x] and game.state.map[x][y]
+  z = z or 0
+  return game.state.map[z] and game.state.map[z][x] and game.state.map[z][x][y]
 end
 game.getTile = getTile
 ---@param x number
 ---@param y number
+---@param z number
 ---@param tile Tile | nil
----@overload fun(pos: vector2D, tile: Tile): Tile
-local function setTile(x, y, tile)
+---@overload fun(x: number, y: number, tile: Tile | nil)
+---@overload fun(pos: vector2D, tile: Tile | nil)
+---@overload fun(pos: vector2D, z: number, tile: Tile | nil)
+local function setTile(x, y, z, tile)
   if type(x) == 'cdata' then
     local vec = x
+    tile = z
+    z = y
     x, y = round(vec.x), round(vec.y)
+
+    if not tile then
+      tile = z
+      z = 0
+    end
+  else
+    if type(z) ~= 'number' then
+      tile = z
+      z = 0
+    end
   end
+  z = z or 0
   local oldTile = getTile(x, y)
-  game.state.map[x] = game.state.map[x] or {}
-  game.state.map[x][y] = tile
+  game.state.map[z] = game.state.map[z] or {}
+  game.state.map[z][x] = game.state.map[z][x] or {}
+  game.state.map[z][x][y] = tile
   if oldTile then
     oldTile:removed()
   end
@@ -102,23 +134,24 @@ game.setTile = setTile
 
 local function getMapMiddle()
   if TRANSITION_TILES % 2 == 1 then
-    return 1
+    return 0
   end
   return 0.5
 end
 
 local function isValidPlacement(tile, x, y)
-  if x < -game.mapWidth then return false end
-  if x > game.mapWidth then return false end
-  if y < -math.floor(game.mapHeight/2) then return false end
-  if y > math.ceil(game.mapHeight/2) then return false end
+  if x < -(game.playWidth - math.ceil(getMapMiddle() - TRANSITION_TILES/2)) then return false end
+  if x > game.playWidth + math.floor(TRANSITION_TILES/2) then return false end
+
+  if y < -math.ceil(game.playHeight/2 - 1) then return false end
+  if y > math.floor(game.playHeight/2) then return false end
 
   if game.state.phase == GamePhase.Attack then
-    if x > getMapMiddle() - TRANSITION_TILES/2 then
+    if x > math.floor(getMapMiddle() - TRANSITION_TILES/2) then
       return false
     end
   elseif game.state.phase == GamePhase.Defense then
-    if x < getMapMiddle() + TRANSITION_TILES/2 then
+    if x < math.ceil(getMapMiddle() + TRANSITION_TILES/2) then
       return false
     end
   end
@@ -128,13 +161,109 @@ local function isValidPlacement(tile, x, y)
   return spot == nil or spot:is(tile)
 end
 
+function game.isOOB(x, y)
+  if x < -(game.mapWidth - math.ceil(getMapMiddle() - TRANSITION_TILES/2)) then return true end
+  if x > game.mapWidth + math.floor(TRANSITION_TILES/2) then return true end
+  if y < -math.ceil(game.mapHeight/2 - 1) then return true end
+  if y > math.floor(game.mapHeight/2) then return true end
+  return false
+end
+
 local function updateTransform()
   game.transform:reset()
   game.transform:translate(mix(sw, 0, (cameraX.eased / 2 + 0.5)), sh/2)
   game.transform:scale(SCALE * ZOOM)
-  game.transform:translate(-(getMapMiddle() + 0.5), 0)
+  game.transform:translate(-(getMapMiddle() + 0.5), -(1 - game.mapHeight % 2)/2)
   if game.mapHeight % 2 == 0 then
     game.transform:translate(0, -0.5)
+  end
+end
+
+local maps = {
+  {
+    width = 12,
+    height = 9,
+    playWidth = 10,
+    playHeight = 5,
+    layers = {
+      [-1] = {
+        '              ',
+        '              ',
+        '  qqqqqqqqqqq ',
+        '  q.........q ',
+        '  q.........q ',
+        '  q.........q ',
+        '  qqqqqqqqqqq ',
+        '              ',
+        '              ',
+      },
+      [0] = {
+        '##############',
+        '##|&|^^^^|&|##',
+        '##     o   /',
+        '##  oo      >',
+        '##/ oo      ',
+        '##/         >',
+        '##/ /////  /',
+        '##############',
+        '##############',
+      }
+    },
+    palette = {
+      ['>'] = {Exit},
+
+      ['^'] = {Wall, {'cafe.wall_top', 'factory.wall_top'}},
+      ['|'] = {Wall, {'cafe.wall_top', 'factory.wall_pillar'}},
+      ['&'] = {Wall, {'cafe.wall_top', 'factory.wall_door'}},
+      ['#'] = {Wall, {'cafe.wall', 'factory.wall'}},
+
+      ['/'] = {Wall, {'cafe.table', 'factory.table'}},
+      ['o'] = {Wall, {'cafe.pillar', 'factory.pillar'}},
+
+      ['.'] = {Wall, {'cafe.floor', 'factory.floor'}},
+      ['q'] = {Wall, {'cafe.wood', 'factory.border'}},
+    },
+  }
+}
+
+local awakeQueue = {}
+
+local function mirrorTilesZ(z, initial)
+  local layer = game.state.map[z]
+  for x, row in pairs(layer) do
+    if x > getMapMiddle() then
+      for y, tile in pairs(row) do
+        if tile.mirrored and (not tile:is(Wall)) or initial then
+          setTile(x, y, z, nil)
+        end
+      end
+    end
+  end
+  for x, row in pairs(layer) do
+    if x < getMapMiddle() then
+      for y, tile in pairs(row) do
+        if (not tile:is(Wall)) or initial then
+          local mirrored = tile:toMirrored()
+          if mirrored then
+            mirrored.mirrored = true
+            local mx, my = math.floor(getMapMiddle() + 0.5) - x, y
+            setTile(mx, my, z, mirrored)
+            mirrored:placed(mx, my, z)
+            table.insert(awakeQueue, mirrored)
+          end
+        end
+      end
+    end
+  end
+end
+
+local function mirrorTiles(initial)
+  if initial then
+    for z in pairs(game.state.map) do
+      mirrorTilesZ(z, true)
+    end
+  else
+    mirrorTilesZ(0)
   end
 end
 
@@ -143,18 +272,38 @@ function game.init()
   game.state.money = game.state.money + 10000
   state = game.state
 
-  map = {}
-
   placing = nil
   placingAngle = 0
 
-  game.mapWidth = 12 * 2 -- both sides
-  game.mapHeight = 6
+  local map = maps[1]
 
+  game.mapWidth = map.width
+  game.mapHeight = map.height
+  game.playWidth = map.playWidth
+  game.playHeight = map.playHeight
+  game.layers = 0
+
+  for z, layer in pairs(map.layers) do
+    game.layers = game.layers + 1
+    for y = 1, map.height do
+      local row = layer[y] or ''
+      for x = 1, #row do
+        local char = string.sub(row, x, x)
+        local spawnTile = map.palette[char]
+        if spawnTile and spawnTile[1] then
+          local newTile = spawnTile[1](unpack(spawnTile[2] or {}))
+          local tx, ty = x - map.width + math.floor(getMapMiddle() - TRANSITION_TILES/2), y - math.ceil(map.height/2)
+          setTile(tx, ty, z, newTile)
+          newTile:placed(tx, ty, z)
+          table.insert(awakeQueue, newTile)
+        end
+      end
+    end
+  end
+
+  mirrorTiles(true)
   updateTransform()
 end
-
-local awakeQueue = {}
 
 game.callbacks = {}
 function game.callbacks.update(dt)
@@ -164,7 +313,7 @@ function game.callbacks.update(dt)
     tile:awake()
   end
   awakeQueue = {}
-  for x, row in pairs(game.state.map) do
+  for x, row in pairs(game.state.map[0]) do
     for y, tile in pairs(row) do
       tile:update(dt)
     end
@@ -172,58 +321,109 @@ function game.callbacks.update(dt)
 
   cameraX.target = game.state.phase == GamePhase.Attack and -1 or 1
   cameraX:update(dt)
+  placeUIEase.target = placing and 1 or 0
+  placeUIEase:update(dt)
 
   updateTransform()
+
+  if placing then
+    local mx, my = game.transform:inverseTransformPoint(love.mouse.getPosition())
+    local x, y = math.floor(mx), math.floor(my)
+
+    if love.mouse.isDown(1) then
+      local oldTile = getTile(x, y)
+      local notDuplicatePlacement = not (oldTile and oldTile:is(placing))
+      if oldTile and oldTile:is(Rotatable) then
+        notDuplicatePlacement = notDuplicatePlacement or oldTile.angle ~= placingAngle
+      end
+
+      if notDuplicatePlacement and isValidPlacement(placing, x, y) then
+        local newTile = placing:new()
+        local shouldChargeCost = oldTile == nil or (not oldTile:is(placing))
+        local hasFunds = true
+
+        if shouldChargeCost then
+          hasFunds = state.money >= placing.getCost()
+          if hasFunds then
+            state.money = state.money - placing.getCost()
+          end
+        end
+
+        if hasFunds then
+          setTile(x, y, newTile)
+          newTile:placed(x, y, 0, placingAngle)
+          newTile:awake()
+        end
+      end
+    end
+
+    if love.mouse.isDown(2) then
+      local currentTile = getTile(x, y)
+      if currentTile and currentTile:is(placing) and currentTile:canQuickRemove() then
+        state.money = state.money + placing.getCost()
+        setTile(x, y, nil)
+      end
+    end
+  end
+end
+
+local function drawPlacing()
+  local mx, my = game.transform:inverseTransformPoint(love.mouse.getPosition())
+  local x, y = math.floor(mx), math.floor(my)
+
+  if x < -(game.playWidth - math.ceil(getMapMiddle() - TRANSITION_TILES/2)) then return end
+  if x > game.playWidth + math.floor(TRANSITION_TILES/2) then return end
+  if y < -math.ceil(game.playHeight/2 - 1) then return end
+  if y > math.floor(game.playHeight/2) then return end
+
+  love.graphics.push()
+
+  love.graphics.translate(x, y)
+  love.graphics.scale(1 / (SCALE))
+
+  placing.drawPreview(x, y, placingAngle, isValidPlacement(placing, x, y))
+
+  if placing:is(Rotatable) then
+    love.graphics.setColor(1, 1, 1, 1)
+    love.graphics.printf('Q', -16, -16, 16, 'right')
+    love.graphics.printf('E', SCALE, -16, 16, 'left')
+  end
+
+  love.graphics.pop()
 end
 
 local function drawWorld()
   love.graphics.push()
   love.graphics.applyTransform(game.transform)
 
-  local endX = game.mapWidth
-  if TRANSITION_TILES % 2 == 1 then
-    endX = endX + 1
-  end
-  for x = -game.mapWidth, endX do
-    for y = -math.floor(game.mapHeight/2), math.ceil(game.mapHeight/2) do
-      love.graphics.push()
+  for z = -(game.layers - 1), 0 do
+    for x = -(game.mapWidth - math.ceil(getMapMiddle() - TRANSITION_TILES/2)), game.mapWidth + math.floor(TRANSITION_TILES/2) do
+      for y = -math.ceil(game.mapHeight/2 - 1), math.floor(game.mapHeight/2) do
+        love.graphics.push()
 
-      love.graphics.translate(x, y)
-      love.graphics.scale(1 / (SCALE))
+        love.graphics.translate(x, y)
+        love.graphics.scale(1 / (SCALE))
 
-      love.graphics.setColor(1, 1, 1, 0.3)
-      love.graphics.line(0, 0, SCALE, 0)
-      love.graphics.line(0, 0, 0, SCALE)
+        --[[if z == 0 then
+          love.graphics.setColor(1, 1, 1, 0.6)
+          love.graphics.line(0, 0, SCALE, 0)
+          love.graphics.line(0, 0, 0, SCALE)
 
-      love.graphics.print(x .. ', ' .. y)
+          love.graphics.print(x .. ', ' .. y)
+        end]]
 
-      local tile = getTile(x, y)
-      if tile then
-        tile:draw()
+        local tile = getTile(x, y, z)
+        if tile then
+          tile:draw()
+        end
+
+        love.graphics.pop()
       end
-
-      love.graphics.pop()
     end
   end
 
   if placing then
-    local mx, my = game.transform:inverseTransformPoint(love.mouse.getPosition())
-    local x, y = math.floor(mx), math.floor(my)
-
-    love.graphics.push()
-
-    love.graphics.translate(x, y)
-    love.graphics.scale(1 / (SCALE))
-
-    placing.drawPreview(x, y, placingAngle, isValidPlacement(placing, x, y))
-
-    if placing:is(Rotatable) then
-      love.graphics.setColor(1, 1, 1, 1)
-      love.graphics.printf('Q', -16, -16, 16, 'right')
-      love.graphics.printf('E', SCALE, -16, 16, 'left')
-    end
-
-    love.graphics.pop()
+    drawPlacing()
   end
 
   love.graphics.setColor(0.3, 1, 0.3)
@@ -236,6 +436,17 @@ end
 
 local function drawUI()
   love.graphics.setColor(1, 1, 1)
+
+  love.graphics.setColor(1, 1, 1, 0.4)
+  love.graphics.draw(assets.sprites.shade, 0, sh, 0, 500/256, 300/256, 128, 128)
+  love.graphics.draw(assets.sprites.shade, sw, sh, 0, 500/256, 300/256, 128, 128)
+  love.graphics.setColor(1, 1, 1)
+
+  local placeControlsX = mix(-96, 8, placeUIEase.eased)
+  love.graphics.setColor(0, 0, 0, 0.8)
+  love.graphics.print('LMB - place\nRMB - remove\nESC - stop', placeControlsX + 1, sh - 96 - 74 + 1)
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.print('LMB - place\nRMB - remove\nESC - stop', placeControlsX, sh - 96 - 74)
 
   -- lazy font size
   love.graphics.push()
@@ -259,31 +470,6 @@ end
 
 function game.callbacks.mousepressed(x, y, button)
   if uiContainer:onClicked(x - sw/2, y - sh/2, button) then return end
-
-  if placing then
-    local mx, my = game.transform:inverseTransformPoint(x, y)
-    local x, y = math.floor(mx), math.floor(my)
-
-    if isValidPlacement(placing, x, y) then
-      local newTile = placing:new()
-      local oldTile = getTile(x, y)
-      local shouldChargeCost = oldTile == nil or (not oldTile:is(placing))
-      local hasFunds = true
-
-      if shouldChargeCost then
-        hasFunds = state.money >= placing.getCost()
-        if hasFunds then
-          state.money = state.money - placing.getCost()
-        end
-      end
-
-      if hasFunds then
-        setTile(x, y, newTile)
-        newTile:placed(x, y, placingAngle)
-        newTile:awake()
-      end
-    end
-  end
 end
 function game.callbacks.mousereleased(x, y, button)
   if uiContainer:onRelease(x - sw/2, y - sh/2, button) then return end
@@ -295,17 +481,15 @@ end
 function game.callbacks.wheelmoved(x, y)
 end
 
-local function mirrorTiles()
-  for x, row in pairs(game.state.map) do
-    if x < getMapMiddle() then
+local function applyAge(swappingTo)
+  for x, row in pairs(game.state.map[0]) do
+    local cond = x < getMapMiddle()
+    if swappingTo == GamePhase.Defense then
+      cond = x > getMapMiddle()
+    end
+    if cond then
       for y, tile in pairs(row) do
-        local mirrored = tile:toMirrored()
-        if mirrored then
-          local mx, my = math.floor((getMapMiddle() + 1)) - x, y
-          setTile(mx, my, mirrored)
-          mirrored:placed(mx, my)
-          table.insert(awakeQueue, mirrored)
-        end
+        tile.age = tile.age + 1
       end
     end
   end
@@ -322,6 +506,7 @@ function game.setPhase(phase)
   if phase == GamePhase.Defense then
     mirrorTiles()
   end
+  applyAge(phase)
 end
 
 ---@param key love.KeyConstant
@@ -337,6 +522,13 @@ function game.callbacks.keypressed(key, code)
     placingAngle = placingAngle + 1
     if placingAngle > 3 then
       placingAngle = 0
+    end
+  end
+  if code == 'escape' then
+    if placing then
+      placing = nil
+    else
+      -- pause menu
     end
   end
   if DEBUG then

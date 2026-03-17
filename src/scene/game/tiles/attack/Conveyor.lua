@@ -88,6 +88,10 @@ function Conveyor.getCost()
   return 200
 end
 
+function Conveyor:canQuickRemove()
+  return true
+end
+
 function Conveyor.drawHUD()
   local w, h = 32, 32
   love.graphics.setColor(1, 1, 1)
@@ -124,8 +128,10 @@ function Conveyor.drawPreview(x, y, angle, valid)
 end
 
 function Conveyor:draw()
-  love.graphics.setColor(1, 1, 1, 1)
+  love.graphics.setShader(assets.shaders.colorize)
+  love.graphics.setColor(1, 1, 1, outQuad(self.placeAnim * 0.4))
   Conveyor.drawStatic(self.pos.x, self.pos.y, self.angle, self.curved, self.flipped)
+  love.graphics.setShader()
 end
 
 function Conveyor:toMirrored()

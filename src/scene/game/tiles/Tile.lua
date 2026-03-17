@@ -6,6 +6,10 @@ local Tile = class('Tile')
 
 function Tile:__init()
   self.pos = vector.new()
+  self.z = 0
+  self.age = 0
+  self.placeAnim = 0
+  self.mirrored = false
 end
 
 function Tile:getWidth()
@@ -18,15 +22,29 @@ end
 function Tile.getCost()
   return -1
 end
-
-function Tile:update(dt)
+function Tile:getSellValue()
+  local cost = self:getCost()
+  if self.age == 0 then return cost end
+  if cost == -1 then return cost end
+  return self:getCost() * 1/(1 + self.age * 0.25)
+end
+function Tile:canQuickRemove()
+  return self.age == 0
 end
 
-function Tile:placed(x, y, angle)
+function Tile:update(dt)
+  if self.placeAnim > 0 then
+    self.placeAnim = math.max(self.placeAnim - dt / 0.2)
+  end
+end
+
+function Tile:placed(x, y, z, angle)
   self.pos = vector.new(x, y)
+  self.z = z
   if self:is(Rotatable) and angle then
     self.angle = angle
   end
+  self.placeAnim = 1
 end
 function Tile:awake()
 end

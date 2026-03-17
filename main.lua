@@ -40,6 +40,8 @@ assets = cargo.init({
   },
 })()
 
+assets.shaders.colorize:send('diff', {1, 1, 1, 1})
+
 require 'src.scenes'
 
 function updateFullscreen()
