@@ -60,7 +60,7 @@ function Path:awake()
   self:updateConnections()
 end
 
-function Path:draw()
+function Path:drawInner()
   local w, h = 32, 32
 
   local frame = frames.horizontal

@@ -59,7 +59,23 @@ function Tile.drawHUD()
 end
 function Tile.drawPreview(x, y, angle, valid)
 end
+function Tile:drawInner()
+end
 function Tile:draw()
+  if self.placeAnim > 0 then
+    love.graphics.push()
+    love.graphics.translate(16, 16)
+    love.graphics.scale(1 + inExpo(self.placeAnim) * 0.15)
+    love.graphics.translate(-16, -16)
+    --love.graphics.setShader(assets.shaders.colorize)
+    --love.graphics.setColor(1, 1, 1, inSine(self.placeAnim * 0.4))
+  end
+  love.graphics.setColor(1, 1, 1)
+  self:drawInner()
+  if self.placeAnim > 0 then
+    --love.graphics.setShader()
+    love.graphics.pop()
+  end
 end
 
 return Tile

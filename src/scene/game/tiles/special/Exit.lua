@@ -9,7 +9,7 @@ function Exit:toMirrored()
   return Entrance(self)
 end
 
-function Exit:draw()
+function Exit:drawInner()
   if state.phase == GamePhase.Defense then return end
   Entrance.drawStatic()
 end

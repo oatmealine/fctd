@@ -31,6 +31,11 @@ local function audioLoader(filename)
   end
 end
 
+fonts = {
+  main = love.graphics.newFont('assets/fonts/fibberish.ttf', 16, 'none'),
+  main_2x = love.graphics.newFont('assets/fonts/fibberish.ttf', 32, 'none'),
+}
+
 ---@type CargoAssets
 assets = cargo.init({
   dir = 'assets',
@@ -87,7 +92,7 @@ function love.update(dt)
 end
 
 function love.draw()
-  --love.graphics.setFont(fonts.main)
+  love.graphics.setFont(fonts.main)
 
   scenes.callbacks.draw()
 

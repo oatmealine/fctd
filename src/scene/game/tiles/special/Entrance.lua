@@ -15,7 +15,7 @@ function Entrance.drawStatic()
   love.graphics.draw(assets.sprites.arrow, 0, math.sin(love.timer.getTime() * 1.5) * 4)
 end
 
-function Entrance:draw()
+function Entrance:drawInner()
   if state.phase == GamePhase.Attack then return end
   self.drawStatic()
 end

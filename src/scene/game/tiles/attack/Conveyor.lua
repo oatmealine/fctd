@@ -120,18 +120,21 @@ end
 
 function Conveyor.drawPreview(x, y, angle, valid)
   love.graphics.setColor(1, 1, 1, 0.5)
-  if not valid then love.graphics.setColor(1, 0, 0, 0.5) end
+  if not valid then
+    love.graphics.setColor(1, 0, 0, 0.5)
+    love.graphics.setShader(assets.shaders.dander)
+    assets.shaders.dander:send('time', love.timer.getTime())
+  end
 
   local curved, flipped = Conveyor.getConnectionState(x, y, angle)
 
   Conveyor.drawStatic(x, y, angle, curved, flipped)
+
+  love.graphics.setShader()
 end
 
-function Conveyor:draw()
-  love.graphics.setShader(assets.shaders.colorize)
-  love.graphics.setColor(1, 1, 1, outQuad(self.placeAnim * 0.4))
+function Conveyor:drawInner()
   Conveyor.drawStatic(self.pos.x, self.pos.y, self.angle, self.curved, self.flipped)
-  love.graphics.setShader()
 end
 
 function Conveyor:toMirrored()

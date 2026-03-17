@@ -28,6 +28,8 @@ local uiContainer = jillo.RelativeContainer:new(0, 0)
 ---@type Tile?
 local placing
 local placingAngle = 0
+local placingAngleEase = easable(0, 24)
+local placingPosEase = easable(vector.new(-9999, -9999), 64)
 
 local placables = jillo.Container:new(0, 64, 0, 0.5, jillo.Direction.Right, 16)
 
@@ -42,6 +44,7 @@ function Placable:__init(thing)
 end
 function Placable:onClicked()
   placing = self.thing
+  placingPosEase:reset(vector.new(-9999, -9999))
   return true
 end
 function Placable:draw(x, y)
@@ -52,6 +55,7 @@ function Placable:draw(x, y)
   love.graphics.setColor(1, 1, 1, self.hover and 1 or 0.5)
   love.graphics.rectangle('line', -self:getWidth()/2, -self:getHeight()/2, self:getWidth(), self:getHeight())
   love.graphics.setColor(1, 1, 1, 1)
+  love.graphics.setFont(fonts.main)
   love.graphics.print('$' .. formatNum(self.thing.getCost()), -self:getWidth()/2, self:getHeight()/2 - 14)
 
   self.thing.drawHUD()
@@ -274,6 +278,8 @@ function game.init()
 
   placing = nil
   placingAngle = 0
+  placingAngleEase:reset(0)
+  placingPosEase:reset(vector.new(-9999, -9999))
 
   local map = maps[1]
 
@@ -323,6 +329,8 @@ function game.callbacks.update(dt)
   cameraX:update(dt)
   placeUIEase.target = placing and 1 or 0
   placeUIEase:update(dt)
+  placingAngleEase.target = placingAngle
+  placingAngleEase:update(dt)
 
   updateTransform()
 
@@ -330,11 +338,18 @@ function game.callbacks.update(dt)
     local mx, my = game.transform:inverseTransformPoint(love.mouse.getPosition())
     local x, y = math.floor(mx), math.floor(my)
 
+    if placingPosEase.target.x == -9999 then
+      placingPosEase:reset(vector.new(x, y))
+    else
+      placingPosEase:set(vector.new(x, y))
+    end
+    placingPosEase:update(dt)
+
     if love.mouse.isDown(1) then
       local oldTile = getTile(x, y)
       local notDuplicatePlacement = not (oldTile and oldTile:is(placing))
       if oldTile and oldTile:is(Rotatable) then
-        notDuplicatePlacement = notDuplicatePlacement or oldTile.angle ~= placingAngle
+        notDuplicatePlacement = notDuplicatePlacement or oldTile.angle ~= (placingAngle % 4)
       end
 
       if notDuplicatePlacement and isValidPlacement(placing, x, y) then
@@ -351,7 +366,7 @@ function game.callbacks.update(dt)
 
         if hasFunds then
           setTile(x, y, newTile)
-          newTile:placed(x, y, 0, placingAngle)
+          newTile:placed(x, y, 0, placingAngle % 4)
           newTile:awake()
         end
       end
@@ -367,27 +382,72 @@ function game.callbacks.update(dt)
   end
 end
 
+local function drawKeybind(key, x, y, scale)
+  scale = scale or 1
+
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(assets.sprites.keys.key, x, y, 0, 2 * scale, 2 * scale)
+
+  local width = fonts.main:getWidth(key)
+  local scaleText = math.min(32 / width, 32 / fonts.main:getHeight())
+
+  love.graphics.push()
+  love.graphics.translate(x, y)
+  love.graphics.translate(32/2 * scale, 32/2 * scale)
+  love.graphics.scale(scaleText * scale)
+
+  love.graphics.setFont(fonts.main)
+  love.graphics.printf(key, -32/2, -fonts.main:getHeight()/2 + 2, 32, 'center')
+  love.graphics.pop()
+end
+local function drawMouse(button, x, y)
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.draw(({assets.sprites.keys.lmb, assets.sprites.keys.rmb})[button], x, y, 0, 2, 2)
+end
+
 local function drawPlacing()
+  if not placing then return end
+
   local mx, my = game.transform:inverseTransformPoint(love.mouse.getPosition())
   local x, y = math.floor(mx), math.floor(my)
 
-  if x < -(game.playWidth - math.ceil(getMapMiddle() - TRANSITION_TILES/2)) then return end
-  if x > game.playWidth + math.floor(TRANSITION_TILES/2) then return end
-  if y < -math.ceil(game.playHeight/2 - 1) then return end
-  if y > math.floor(game.playHeight/2) then return end
+  if
+    x < -(game.playWidth - math.ceil(getMapMiddle() - TRANSITION_TILES/2)) or
+    x > game.playWidth + math.floor(TRANSITION_TILES/2) or
+    y < -math.ceil(game.playHeight/2 - 1) or
+    y > math.floor(game.playHeight/2)
+  then
+    placingPosEase:reset(vector.new(-9999, -9999))
+    return
+  end
+
+  local shouldDrawUnder = true
+
+  local oldTile = getTile(x, y)
+  if oldTile and oldTile:is(placing) then
+    shouldDrawUnder = oldTile:is(Rotatable) and oldTile.angle ~= (placingAngle % 4)
+  end
 
   love.graphics.push()
 
-  love.graphics.translate(x, y)
+  love.graphics.translate(placingPosEase.eased.x, placingPosEase.eased.y)
   love.graphics.scale(1 / (SCALE))
 
-  placing.drawPreview(x, y, placingAngle, isValidPlacement(placing, x, y))
+  if shouldDrawUnder then
+    placing.drawPreview(placingPosEase.eased.x, placingPosEase.eased.y, placingAngleEase.eased, isValidPlacement(placing, x, y))
+  end
+
+  love.graphics.push()
+  love.graphics.translate(16, 16)
+  love.graphics.rotate((placingAngle - placingAngleEase.eased) * 0.06 * math.pi/2)
 
   if placing:is(Rotatable) then
     love.graphics.setColor(1, 1, 1, 1)
-    love.graphics.printf('Q', -16, -16, 16, 'right')
-    love.graphics.printf('E', SCALE, -16, 16, 'left')
+    drawKeybind('Q', -32, -32, 0.5)
+    drawKeybind('E', 16, -32, 0.5)
   end
+
+  love.graphics.pop()
 
   love.graphics.pop()
 end
@@ -422,9 +482,7 @@ local function drawWorld()
     end
   end
 
-  if placing then
-    drawPlacing()
-  end
+  drawPlacing()
 
   love.graphics.setColor(0.3, 1, 0.3)
   love.graphics.setLineWidth(0.12)
@@ -442,19 +500,16 @@ local function drawUI()
   love.graphics.draw(assets.sprites.shade, sw, sh, 0, 500/256, 300/256, 128, 128)
   love.graphics.setColor(1, 1, 1)
 
-  local placeControlsX = mix(-96, 8, placeUIEase.eased)
-  love.graphics.setColor(0, 0, 0, 0.8)
-  love.graphics.print('LMB - place\nRMB - remove\nESC - stop', placeControlsX + 1, sh - 96 - 74 + 1)
-  love.graphics.setColor(1, 1, 1)
-  love.graphics.print('LMB - place\nRMB - remove\nESC - stop', placeControlsX, sh - 96 - 74)
+  love.graphics.setFont(fonts.main_2x)
+  local placeControlsX = mix(-256, 8, placeUIEase.eased)
+  printWithShadow('   place\n   remove\n   stop', placeControlsX, sh - 96 - fonts.main_2x:getHeight() * 3 - 16)
 
-  -- lazy font size
-  love.graphics.push()
-  love.graphics.translate(8, sh - 8)
-  love.graphics.scale(1.5)
+  drawMouse(1, placeControlsX, sh - 96 - fonts.main_2x:getHeight() * 3 - 16)
+  drawMouse(2, placeControlsX, sh - 96 - fonts.main_2x:getHeight() * 2 - 16)
+  drawKeybind('Esc', placeControlsX, sh - 96 - fonts.main_2x:getHeight() * 1 - 16)
 
-  love.graphics.print('$' .. formatNum(state.money), 0, -16)
-  love.graphics.pop()
+  love.graphics.setFont(fonts.main_2x)
+  printWithShadow('$' .. formatNum(state.money), 8, sh - 8 - 24)
 
   placables:setWidth(sw - 32)
   uiContainer:setDimensions(sw, sh)
@@ -514,15 +569,9 @@ end
 function game.callbacks.keypressed(key, code)
   if code == 'q' then
     placingAngle = placingAngle - 1
-    if placingAngle < 0 then
-      placingAngle = 3
-    end
   end
   if code == 'e' then
     placingAngle = placingAngle + 1
-    if placingAngle > 3 then
-      placingAngle = 0
-    end
   end
   if code == 'escape' then
     if placing then

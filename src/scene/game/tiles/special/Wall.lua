@@ -193,7 +193,7 @@ function Wall:toMirrored()
   return Wall(self.mirroredSpriteRef, self.spriteRef)
 end
 
-function Wall:draw()
+function Wall:drawInner()
   if not self.spriteRef then
     love.graphics.setColor(1, 0, 1, 1)
     love.graphics.rectangle('fill', 0, 0, 32, 32)
