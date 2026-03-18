@@ -11,7 +11,9 @@ local frames = {}
 for i, v in ipairs({'straight', 'curved'}) do
   frames[v] = {}
   for angle = 0, 3 do
-    frames[v][angle] = love.graphics.newQuad((i - 1) * 32 * 4 + angle * 32, 0, 32, 32, sprite)
+    local a = angle
+    if v == 'straight' then a = a % 2 end
+    frames[v][angle] = love.graphics.newQuad((i - 1) * 32 * 2 + a * 32, 0, 32, 32, sprite)
   end
 end
 
@@ -38,8 +40,6 @@ function Path.getConnectionState(x, y, angle)
   local leftVec = -rightVec
   local leftTile = scenes.scene.game.getTile(pos + leftVec)
   local left = leftTile and leftTile:is(Path) and leftTile.angle == (angle + 1) % 4
-
-  log.debug(x, y, left, backwards, right)
 
   if backwards then return false, false end -- prioritize going forwards over elsewhere
   if left and right then return end
