@@ -7,7 +7,7 @@ local Tile       = require 'src.scene.game.tiles.Tile'
 local Conveyor = class('Conveyor', Tile, Rotatable)
 
 local FPS = 10
-local sprite = assets.sprites.conveyor
+local sprite = assets.sprites.tiles.conveyor
 local frames = {
   straight = {},
   curved = {},
@@ -21,7 +21,6 @@ end
 function Conveyor:__init(angle)
   Tile.__init(self)
   Rotatable.__init(self, angle)
-  -- todo
   self.curved = false
   self.flipped = false
 end
@@ -95,7 +94,7 @@ end
 function Conveyor.drawHUD()
   local w, h = 32, 32
   love.graphics.setColor(1, 1, 1)
-  love.graphics.draw(assets.sprites.conveyor, frames.straight[1], -w/2, -h/2)
+  love.graphics.draw(sprite, frames.straight[1], -w/2, -h/2)
 end
 
 function Conveyor.drawStatic(x, y, angle, curved, flipped)
@@ -103,17 +102,13 @@ function Conveyor.drawStatic(x, y, angle, curved, flipped)
   local w, h = 32, 32
   local baseFrames = curved and frames.curved or frames.straight
 
-  local scaleSide = flipped and -1 or 1
-
-  local scaleX, scaleY = 1, scaleSide
-
   if curved then angle = (angle + 3) % 4 end
 
   love.graphics.draw(
-    assets.sprites.conveyor, baseFrames[math.floor(t * FPS) % #baseFrames + 1],
+    sprite, baseFrames[math.floor(t * FPS) % #baseFrames + 1],
     w/2, h/2,
     angle * math.pi/2,
-    scaleX, scaleY,
+    1, flipped and -1 or 1,
     w/2, h/2
   )
 end
@@ -139,7 +134,16 @@ end
 
 function Conveyor:toMirrored()
   local path = Path()
-  path.angle = (self.angle + 2) % 4
+  local angle = self.angle
+  -- vertical flip
+  if angle == 0 or angle == 2 then
+    angle = (angle + 2) % 4
+  end
+  -- adjust for corners
+  if self.curved then
+    angle = (angle + (self.flipped and 3 or 1)) % 4
+  end
+  path.angle = angle
   return path
 end
 

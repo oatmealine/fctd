@@ -12,7 +12,7 @@ end
 
 function Entrance.drawStatic()
   love.graphics.setColor(1, 1, 1, 0.5)
-  love.graphics.draw(assets.sprites.arrow, 0, math.sin(love.timer.getTime() * 1.5) * 4)
+  love.graphics.draw(assets.sprites.tiles.arrow, 0, math.sin(love.timer.getTime() * 1.5) * 4)
 end
 
 function Entrance:drawInner()

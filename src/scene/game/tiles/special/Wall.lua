@@ -6,7 +6,7 @@ local Wall = class('Wall', Tile)
 
 local sprites = {
   cafe = {
-    spritesheet = assets.sprites.cafe,
+    spritesheet = assets.sprites.stage.cafe,
     floor = {
       { {0, 1} }
     },
@@ -35,7 +35,7 @@ local sprites = {
     }
   },
   factory = {
-    spritesheet = assets.sprites.factory1,
+    spritesheet = assets.sprites.stage.factory,
     floor = { {
       {0, 0}, {1, 0}, {2, 0},
       {0, 1}, {1, 1},

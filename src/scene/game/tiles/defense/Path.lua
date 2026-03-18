@@ -1,21 +1,55 @@
 local class = require 'lib.lowerclass'
 local Tile  = require 'src.scene.game.tiles.Tile'
+local Rotatable = require 'src.scene.game.tiles.Rotatable'
 
----@class Path : Tile
-local Path = class('Path', Tile)
+---@class Path : Tile, Rotatable
+local Path = class('Path', Tile, Rotatable)
 
-local sprite = assets.sprites.path
+local sprite = assets.sprites.tiles.path
 local frames = {}
 
-for i, v in ipairs({'cross', 'horizontal', 'vertical'}) do
-  frames[v] = love.graphics.newQuad((i - 1) * 32, 0, 32, 32, sprite)
+for i, v in ipairs({'straight', 'curved'}) do
+  frames[v] = {}
+  for angle = 0, 3 do
+    frames[v][angle] = love.graphics.newQuad((i - 1) * 32 * 4 + angle * 32, 0, 32, 32, sprite)
+  end
 end
 
-function Path:__init()
+function Path:__init(angle)
   Tile.__init(self)
+  Rotatable.__init(self, angle)
+  self.curved = false
+  self.flipped = false
+end
 
-  self.connCross = false
-  self.connVertical = false
+function Path.getConnectionState(x, y, angle)
+  local pos = vector.new(x, y)
+
+  local forwardsVec = vector.new(0, -1):rotate(angle * 90)
+
+  local backwardsVec = -forwardsVec
+  local backwardsTile = scenes.scene.game.getTile(pos + backwardsVec)
+  local backwards = backwardsTile and backwardsTile:is(Path) and backwardsTile.angle == angle
+
+  local rightVec = forwardsVec:rotate(90)
+  local rightTile = scenes.scene.game.getTile(pos + rightVec)
+  local right = rightTile and rightTile:is(Path) and rightTile.angle == (angle + 3) % 4
+
+  local leftVec = -rightVec
+  local leftTile = scenes.scene.game.getTile(pos + leftVec)
+  local left = leftTile and leftTile:is(Path) and leftTile.angle == (angle + 1) % 4
+
+  log.debug(x, y, left, backwards, right)
+
+  if backwards then return false, false end -- prioritize going forwards over elsewhere
+  if left and right then return end
+  if left then
+    return true, true
+  end
+  if right then
+    return true, false
+  end
+  return false, false
 end
 
 function Path:updateConnections()
@@ -23,37 +57,17 @@ function Path:updateConnections()
     return
   end
 
-  local x, y = self.pos:unpack()
+  self.curved, self.flipped =
+    Path.getConnectionState(self.pos.x, self.pos.y, self.angle)
 
-  local upTile = scenes.scene.game.getTile(x, y - 1)
-  local up = upTile and upTile:is(Path)
+  local forwardsVec = vector.new(0, -1):rotate(self.angle * 90)
+  local forwardsTile = scenes.scene.game.getTile(self.pos + forwardsVec)
 
-  local rightTile = scenes.scene.game.getTile(x + 1, y)
-  local right = rightTile and rightTile:is(Path)
-
-  local downTile = scenes.scene.game.getTile(x, y + 1)
-  local down = downTile and downTile:is(Path)
-
-  local leftTile = scenes.scene.game.getTile(x - 1, y)
-  local left = leftTile and leftTile:is(Path)
-
-  self.connCross = false
-  self.connVertical = false
-  if up and down and (not right) and (not left) then
-    self.connVertical = true
-  elseif left and right and (not up) and (not down) then
-    self.connVertical = false
-  else
-    self.connCross = true
+  if forwardsTile and forwardsTile:is(Path) then
+    self.excludeFromConnectionsCheck = true
+    forwardsTile--[[@as Path]]:updateConnections()
+    self.excludeFromConnectionsCheck = false
   end
-
-  self.excludeFromConnectionsCheck = true
-  for _, tile in ipairs({upTile, rightTile, downTile, leftTile}) do
-    if tile and tile:is(Path) then
-      tile--[[@as Path]]:updateConnections()
-    end
-  end
-  self.excludeFromConnectionsCheck = false
 end
 
 function Path:awake()
@@ -63,9 +77,11 @@ end
 function Path:drawInner()
   local w, h = 32, 32
 
-  local frame = frames.horizontal
-  if self.connVertical then frame = frames.vertical end
-  if self.connCross then frame = frames.cross end
+  local base = frames.straight
+  if self.curved then base = frames.curved end
+  local angle = self.angle
+  if self.flipped then angle = (self.angle + 3) % 4 end
+  local frame = base[(angle + 3) % 4]
 
   love.graphics.setColor(1, 1, 1, 1)
   love.graphics.draw(
