@@ -38,13 +38,15 @@ function Tile:update(dt)
   end
 end
 
-function Tile:placed(x, y, z, angle)
+function Tile:placed(x, y, z, angle, anim)
   self.pos = vector.new(x, y)
   self.z = z
   if self:is(Rotatable) and angle then
     self.angle = angle
   end
-  self.placeAnim = 1
+  if anim then
+    self.placeAnim = 1
+  end
 end
 function Tile:awake()
 end
@@ -57,9 +59,11 @@ end
 
 function Tile.drawHUD()
 end
-function Tile.drawPreview(x, y, angle, valid)
+function Tile.drawPreview(x, y, valid, angle)
 end
 function Tile:drawInner()
+end
+function Tile:drawItems()
 end
 function Tile:draw()
   if self.placeAnim > 0 then

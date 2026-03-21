@@ -107,6 +107,10 @@ function Wall:shouldConnect(other)
   return self.spriteRef == other.spriteRef or self.spriteRef == other.mirroredSpriteRef
 end
 
+function Wall:update(dt)
+  Tile.update(self, dt)
+end
+
 function Wall:awake()
   if not self.spriteRef then return end
 

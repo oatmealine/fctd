@@ -1,4 +1,5 @@
 local jillo = require 'lib.jillo'
+local Burner= require 'src.scene.game.tiles.attack.Burner'
 jillo.shouldScissor = false -- for shame
 local class = require 'lib.lowerclass'
 
@@ -6,6 +7,7 @@ local Rotatable = require 'src.scene.game.tiles.Rotatable'
 local Conveyor = require 'src.scene.game.tiles.attack.Conveyor'
 local Exit = require 'src.scene.game.tiles.special.Exit'
 local Wall = require 'src.scene.game.tiles.special.Wall'
+local DoughBox = require 'src.scene.game.tiles.attack.DoughBox'
 
 ---@class GameScene : Scene
 local game = {}
@@ -63,6 +65,8 @@ function Placable:draw(x, y)
 end
 
 placables:add(Placable:new(Conveyor))
+placables:add(Placable:new(DoughBox))
+placables:add(Placable:new(Burner))
 
 uiContainer:add(placables, jillo.Anchor.BottomLeft, 16, -48)
 
@@ -346,6 +350,7 @@ function game.callbacks.update(dt)
   end
 
   cameraX.target = game.state.phase == GamePhase.Attack and -1 or 1
+  --cameraX.target = 0
   cameraX:update(dt)
   placeUIEase.target = placing and 1 or 0
   placeUIEase:update(dt)
@@ -386,7 +391,7 @@ function game.callbacks.update(dt)
 
         if hasFunds then
           setTile(x, y, newTile)
-          newTile:placed(x, y, 0, placingAngle % 4)
+          newTile:placed(x, y, 0, placingAngle % 4, true)
           newTile:awake()
         end
       end
@@ -454,7 +459,7 @@ local function drawPlacing()
   love.graphics.scale(1 / (SCALE))
 
   if shouldDrawUnder then
-    placing.drawPreview(placingPosEase.eased.x, placingPosEase.eased.y, placingAngleEase.eased, isValidPlacement(placing, x, y))
+    placing.drawPreview(placingPosEase.eased.x, placingPosEase.eased.y, isValidPlacement(placing, x, y), placingAngleEase.eased)
   end
 
   love.graphics.push()
@@ -489,14 +494,7 @@ local function drawWorld()
           --love.graphics.line(0, 0, SCALE, 0)
           --love.graphics.line(0, 0, 0, SCALE)
 
-          --love.graphics.print(x .. ', ' .. y)
-        end
-
-        -- no fucking clue why this is necessary
-        if z ~= 0 then
-          love.graphics.translate(SCALE/2, SCALE/2)
-          love.graphics.scale(28/32)
-          love.graphics.translate(-SCALE/2, -SCALE/2)
+          love.graphics.print(x .. ',' .. y)
         end
 
         local tile = getTile(x, y, z)
@@ -509,12 +507,30 @@ local function drawWorld()
     end
   end
 
+  for x = -(game.mapWidth - math.ceil(getMapMiddle() - TRANSITION_TILES/2)), game.mapWidth + math.floor(TRANSITION_TILES/2) do
+    for y = -math.ceil(game.mapHeight/2 - 1), math.floor(game.mapHeight/2) do
+      love.graphics.push()
+
+      love.graphics.translate(x, y)
+      love.graphics.scale(1 / SCALE)
+
+      local tile = getTile(x, y, 0)
+      if tile then
+        tile:drawItems()
+      end
+
+      love.graphics.pop()
+    end
+  end
+
   drawPlacing()
 
-  love.graphics.setColor(0.3, 1, 0.3)
-  love.graphics.setLineWidth(0.12)
-  love.graphics.line(getMapMiddle() + 0.5, -game.mapHeight, getMapMiddle() + 0.5, game.mapHeight)
-  love.graphics.setLineWidth(1)
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.setShader(assets.shaders.beam)
+  assets.shaders.beam:send('time', love.timer.getTime())
+  assets.shaders.beam:send('size', { 3 * SCALE, game.mapHeight * 2 * SCALE })
+  love.graphics.draw(assets.sprites.quad, getMapMiddle() + 0.5 - 1.5, -game.mapHeight, 0, 3, game.mapHeight*2)
+  love.graphics.setShader()
 
   love.graphics.pop()
 end
@@ -610,6 +626,9 @@ function game.callbacks.keypressed(key, code)
   if DEBUG then
     if code == 'g' then
       game.setPhase(1 - game.state.phase)
+    end
+    if code == 'm' then
+      game.state.money = game.state.money + 1000
     end
   end
 end
