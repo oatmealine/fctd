@@ -186,29 +186,46 @@ end
 local maps = {
   {
     width = 12,
-    height = 9,
+    height = 11,
     playWidth = 10,
     playHeight = 5,
     layers = {
+      [-2] = {
+        '              ',
+        '              ',
+        '              ',
+        '  qqqqqqqqqqq ',
+        '  q.........q ',
+        '  q.........q ',
+        '  q.........q ',
+        '  qqqqqqqqqqq ',
+        '              ',
+        '              ',
+        '              ',
+      },
       [-1] = {
         '              ',
         '              ',
-        '  qqqqqqqqqqq ',
-        '  q.........q ',
-        '  q.........q ',
-        '  q.........q ',
-        '  qqqqqqqqqqq ',
+        '              ',
+        '              ',
+        '   ?????????  ',
+        '   ?????????  ',
+        '   ?????????  ',
+        '              ',
+        '              ',
         '              ',
         '              ',
       },
       [0] = {
         '##############',
+        '##############',
         '##|&|^^^^|&|##',
-        '##     o   /',
-        '##  oo      >',
-        '##/ oo      ',
-        '##/         >',
-        '##/ /////  /',
+        '##  -   ==  ',
+        '##          >',
+        '##          ',
+        '##  o    o  >',
+        '##          ',
+        '##############',
         '##############',
         '##############',
       }
@@ -221,11 +238,14 @@ local maps = {
       ['&'] = {Wall, {'cafe.wall_top', 'factory.wall_door'}},
       ['#'] = {Wall, {'cafe.wall', 'factory.wall'}},
 
-      ['/'] = {Wall, {'cafe.table', 'factory.table'}},
-      ['o'] = {Wall, {'cafe.pillar', 'factory.pillar'}},
+      ['o'] = {Wall, {'cafe.table', 'factory.prop'}},
+      ['-'] = {Wall, {'cafe.shelf', 'factory.prop'}},
+      ['='] = {Wall, {'cafe.bigshelf', 'factory.prop'}},
 
       ['.'] = {Wall, {'cafe.floor', 'factory.floor'}},
       ['q'] = {Wall, {'cafe.wood', 'factory.border'}},
+
+      ['?'] = {Wall, {nil, 'factory.litter'}}
     },
   }
 }
@@ -462,15 +482,22 @@ local function drawWorld()
         love.graphics.push()
 
         love.graphics.translate(x, y)
-        love.graphics.scale(1 / (SCALE))
+        love.graphics.scale(1 / SCALE)
 
-        --[[if z == 0 then
+        if z == 0 then
           love.graphics.setColor(1, 1, 1, 0.6)
-          love.graphics.line(0, 0, SCALE, 0)
-          love.graphics.line(0, 0, 0, SCALE)
+          --love.graphics.line(0, 0, SCALE, 0)
+          --love.graphics.line(0, 0, 0, SCALE)
 
-          love.graphics.print(x .. ', ' .. y)
-        end]]
+          --love.graphics.print(x .. ', ' .. y)
+        end
+
+        -- no fucking clue why this is necessary
+        if z ~= 0 then
+          love.graphics.translate(SCALE/2, SCALE/2)
+          love.graphics.scale(28/32)
+          love.graphics.translate(-SCALE/2, -SCALE/2)
+        end
 
         local tile = getTile(x, y, z)
         if tile then

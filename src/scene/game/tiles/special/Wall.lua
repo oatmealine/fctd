@@ -11,7 +11,7 @@ local sprites = {
       { {0, 1} }
     },
     wall = {
-      {},
+      { {1, 3} },
       d = { {0, 2} },
       r = { {1, 2} },
       l = { {2, 2} },
@@ -32,6 +32,16 @@ local sprites = {
       { {2, 0} },
       lr = { {0, 0}, {1, 0} },
       ud = { {3, 0}, {4, 0} },
+    },
+    table = {
+      { {0, 4}, {1, 4}, {2, 4}, {3, 4} },
+    },
+    shelf = {
+      { {4, 4}, {5, 4} },
+    },
+    bigshelf = {
+      pr = { {6, 4} },
+      pl = { {7, 4} },
     }
   },
   factory = {
@@ -43,7 +53,7 @@ local sprites = {
       {0, 1}, {0, 1}, {0, 1}, {0, 1}, {0, 1}, {0, 1},
     } },
     wall = {
-      {},
+      { {3, 4} },
       d = { {0, 3} },
       r = { {1, 3} },
       l = { {2, 3} },
@@ -71,6 +81,15 @@ local sprites = {
       lr = { {1, 2} },
       ud = { {2, 2} },
     },
+    litter = {
+      {
+        {0, 5}, {1, 5}, {2, 5},
+        {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}, {}
+      }
+    },
+    prop = {
+      { {0, 6}, {1, 6} },
+    },
   }
 }
 
@@ -89,6 +108,8 @@ function Wall:shouldConnect(other)
 end
 
 function Wall:awake()
+  if not self.spriteRef then return end
+
   local x, y = self.pos:unpack()
   local z = self.z
 
@@ -106,6 +127,18 @@ function Wall:awake()
 
   local subspr = 'o'
 
+  if l then
+    subspr = 'pl'
+  end
+  if r then
+    subspr = 'pr'
+  end
+  if u then
+    subspr = 'pu'
+  end
+  if d then
+    subspr = 'pd'
+  end
   if u and d then
     subspr = 'ud'
   end
@@ -176,7 +209,6 @@ function Wall:awake()
 
   local sprite = sheet[segments[2]]
   if not sprite then
-    self.spriteRef = nil
     return
   end
 
@@ -186,6 +218,10 @@ function Wall:awake()
   end
 
   local ref = refs[math.random(#refs)]
+  if not ref[1] then
+    self.spriteRef = nil
+    return
+  end
   self.quad = love.graphics.newQuad(ref[1] * 32, ref[2] * 32, 32, 32, self.sprite)
 end
 
@@ -195,15 +231,13 @@ end
 
 function Wall:drawInner()
   if not self.spriteRef then
-    love.graphics.setColor(1, 0, 1, 1)
-    love.graphics.rectangle('fill', 0, 0, 32, 32)
     return
   end
   if self.sprite and self.quad then
     love.graphics.setColor(1, 1, 1, 1)
     love.graphics.draw(self.sprite, self.quad)
   else
-    love.graphics.setColor(0, 0, 0, 1)
+    love.graphics.setColor(1, 0, 1, 1)
     love.graphics.rectangle('fill', 0, 0, 32, 32)
   end
 end
