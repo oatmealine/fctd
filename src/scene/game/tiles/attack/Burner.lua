@@ -48,7 +48,17 @@ function Burner.drawStatic(angle)
 end
 
 function Burner.getCost()
-  return 500
+  return 1000
+end
+
+function Burner.getName()
+  return 'Burner'
+end
+function Burner.getDescription()
+  return 'A pretty crude way of baking a cake. Be careful around fire!'
+end
+function Burner.canInspect()
+  return true
 end
 
 function Burner.drawHUD()
@@ -73,7 +83,6 @@ function Burner.drawPreview(x, y, valid, angle)
   love.graphics.setShader()
 end
 
-
 function Burner:drawInner()
   love.graphics.setColor(1, 1, 1)
   Burner.drawStatic(self.angle)
@@ -92,6 +101,9 @@ function Burner:drawItems()
   love.graphics.draw(spr, 0, 0, (self.angle - 1) * math.pi/2, 1, 1, 0, spr:getHeight()/2)
   love.graphics.setShader()
   love.graphics.pop()
+  if self.angle == 2 then
+    love.graphics.draw(assets.sprites.tiles.machines.burnerdownfire)
+  end
 end
 
 return Burner

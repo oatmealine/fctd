@@ -1,5 +1,8 @@
 local jillo = require 'lib.jillo'
 local Burner= require 'src.scene.game.tiles.attack.Burner'
+local tooltip = require 'src.scene.game.tooltip'
+local color   = require 'lib.color'
+local flexibox= require 'src.lib.flexibox'
 jillo.shouldScissor = false -- for shame
 local class = require 'lib.lowerclass'
 
@@ -33,6 +36,20 @@ local placingAngle = 0
 local placingAngleEase = easable(0, 24)
 local placingPosEase = easable(vector.new(-9999, -9999), 64)
 
+---@type Tile?
+local inspecting
+local inspectingTween = tweenable(0)
+
+local inspectBoxLink
+
+local function removeInspect()
+  if inspectBoxLink then uiContainer:remove(inspectBoxLink.element) end
+  inspectBoxLink = nil
+  inspecting = nil
+end
+
+local currentTooltip = {}
+
 local placables = jillo.Container:new(0, 64, 0, 0.5, jillo.Direction.Right, 16)
 
 ---@class Placable : Element
@@ -46,6 +63,7 @@ function Placable:__init(thing)
 end
 function Placable:onClicked()
   placing = self.thing
+  removeInspect()
   placingPosEase:reset(vector.new(-9999, -9999))
   return true
 end
@@ -56,12 +74,21 @@ function Placable:draw(x, y)
   love.graphics.rectangle('fill', -self:getWidth()/2, -self:getHeight()/2, self:getWidth(), self:getHeight())
   love.graphics.setColor(1, 1, 1, self.hover and 1 or 0.5)
   love.graphics.rectangle('line', -self:getWidth()/2, -self:getHeight()/2, self:getWidth(), self:getHeight())
-  love.graphics.setColor(1, 1, 1, 1)
-  love.graphics.setFont(fonts.main)
-  love.graphics.print('$' .. formatNum(self.thing.getCost()), -self:getWidth()/2, self:getHeight()/2 - 14)
 
+  love.graphics.push()
+  love.graphics.scale(1.5)
   self.thing.drawHUD()
   love.graphics.pop()
+
+  love.graphics.setColor(1, 1, 1, 1)
+  love.graphics.setFont(fonts.main)
+  printWithShadow('$' .. formatNum(self.thing.getCost()), -self:getWidth()/2 + 4, self:getHeight()/2 - 16)
+
+  love.graphics.pop()
+
+  if self.hover then
+    currentTooltip = { x = x, y = y - self:getHeight()/2, self.thing.getName(), self.thing.getDescription(), true }
+  end
 end
 
 placables:add(Placable:new(Conveyor))
@@ -70,9 +97,60 @@ placables:add(Placable:new(Burner))
 
 uiContainer:add(placables, jillo.Anchor.BottomLeft, 16, -48)
 
-local roundUI = jillo.Sprite(assets.sprites.round_ui, 2)
+local roundUI = jillo.Sprite(assets.sprites.ui.round_ui, 2)
 
 uiContainer:add(roundUI, jillo.Anchor.BottomRight, 0, 0)
+
+---@class InspectBox : Element
+local InspectBox = class('InspectBox', jillo.Element)
+
+---@param tile Tile
+function InspectBox:__init(tile)
+  self.tile = tile
+  self.title = love.graphics.newText(fonts.main_2x, tile.getName())
+  self.text = love.graphics.newText(fonts.main, tile.getDescription())
+end
+
+function InspectBox:getWidth()
+  return 175
+end
+function InspectBox:getHeight()
+  return 200
+end
+
+function InspectBox:update(dt)
+  local x, y = game.transform:transformPoint(self.tile.pos:unpack())
+
+  if x > sw/2 then
+    x, y = game.transform:transformPoint((self.tile.pos):unpack())
+    x = x - self:getWidth() - 16
+  else
+    x, y = game.transform:transformPoint((self.tile.pos + vector.new(1, 0)):unpack())
+    x = x + 16
+  end
+
+  inspectBoxLink.x = x + self:getWidth()/2
+  inspectBoxLink.y = y + self:getHeight()/2
+end
+
+local panelDark = flexibox.new(assets.sprites.ui.panel_dark)
+
+function InspectBox:draw(x, y)
+  love.graphics.push()
+
+  love.graphics.translate(x, y)
+  love.graphics.scale(inspectingTween.eased)
+  love.graphics.translate(-self:getWidth()/2, -self:getHeight()/2)
+
+  love.graphics.setColor(1, 1, 1)
+  panelDark:draw(0, 0, self:getWidth(), self:getHeight(), 2)
+
+  love.graphics.setColor(1, 1, 1)
+  love.graphics.setFont(fonts.main_2x)
+  love.graphics.printf(self.tile.getName(), 16, 16, self:getWidth() - 32, 'left')
+
+  love.graphics.pop()
+end
 
 ---@class GameState
 game.state = {
@@ -301,6 +379,7 @@ function game.init()
   state = game.state
 
   placing = nil
+  removeInspect()
   placingAngle = 0
   placingAngleEase:reset(0)
   placingPosEase:reset(vector.new(-9999, -9999))
@@ -404,7 +483,19 @@ function game.callbacks.update(dt)
         setTile(x, y, nil)
       end
     end
+  else
+    local mx, my = game.transform:inverseTransformPoint(love.mouse.getPosition())
+    local x, y = math.floor(mx), math.floor(my)
+    local tile = getTile(x, y)
+
+    if tile and tile.canInspect() and tile ~= inspecting then
+      tile.hover:set(1)
+    end
   end
+  if inspecting then
+    inspecting.hover:set(1)
+  end
+  inspectingTween:update(dt)
 end
 
 local function drawKeybind(key, x, y, scale)
@@ -557,10 +648,19 @@ local function drawUI()
   placables:setWidth(sw - 32)
   uiContainer:setDimensions(sw, sh)
   uiContainer:draw(sw/2, sh/2, 1)
+
+  if currentTooltip[1] then
+    love.graphics.push()
+    love.graphics.translate(currentTooltip.x, currentTooltip.y)
+    tooltip.draw(currentTooltip[1], currentTooltip[2], color.fromHex('ff4400'), currentTooltip[3])
+    love.graphics.pop()
+  end
 end
 
 function game.callbacks.draw()
   sw, sh = love.graphics.getWidth(), love.graphics.getHeight()
+
+  currentTooltip = {}
 
   drawWorld()
   drawUI()
@@ -568,6 +668,24 @@ end
 
 function game.callbacks.mousepressed(x, y, button)
   if uiContainer:onClicked(x - sw/2, y - sh/2, button) then return end
+
+  local mx, my = game.transform:inverseTransformPoint(x, y)
+  local tx, ty = math.floor(mx), math.floor(my)
+  local tile = getTile(tx, ty)
+  if button == 1 then
+    if tile and tile.canInspect() then
+      if tile ~= inspecting then
+        inspecting = tile
+        inspectingTween:reset(0.8)
+        inspectingTween:tween(1, outElastic, 0.7)
+
+        local inspectBox = InspectBox(tile)
+        inspectBoxLink = uiContainer:add(inspectBox, jillo.Anchor.TopLeft)
+      else
+        removeInspect()
+      end
+    end
+  end
 end
 function game.callbacks.mousereleased(x, y, button)
   if uiContainer:onRelease(x - sw/2, y - sh/2, button) then return end
@@ -600,6 +718,7 @@ function game.setPhase(phase)
   game.state.phase = phase
 
   placing = nil
+  removeInspect()
 
   if phase == GamePhase.Defense then
     mirrorTiles()
@@ -617,7 +736,9 @@ function game.callbacks.keypressed(key, code)
     placingAngle = placingAngle + 1
   end
   if code == 'escape' then
-    if placing then
+    if inspecting then
+      removeInspect()
+    elseif placing then
       placing = nil
     else
       -- pause menu

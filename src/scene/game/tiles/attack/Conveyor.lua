@@ -34,6 +34,13 @@ function Conveyor:__init(angle)
   self.itemQueue = {}
 end
 
+function Conveyor.getName()
+  return 'Conveyor'
+end
+function Conveyor.getDescription()
+  return 'Your basic unit of transport. Gets items from point A to point B.'
+end
+
 function Conveyor:hasSpace()
   return not (self.itemQueue[1] and self.itemQueue[1].t <= PULL_SPEED / SPEED)
 end

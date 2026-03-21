@@ -98,7 +98,7 @@ function love.draw()
 
   if DEBUG then
     love.graphics.setColor(1, 1, 1, 1)
-    --love.graphics.setFont(fonts.main)
+    love.graphics.setFont(fonts.main)
     love.graphics.print(love.timer.getFPS() .. 'FPS', 0, 0)
   end
 

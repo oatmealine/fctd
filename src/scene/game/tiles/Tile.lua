@@ -10,6 +10,7 @@ function Tile:__init()
   self.age = 0
   self.placeAnim = 0
   self.mirrored = false
+  self.hover = easable(0, 24)
 end
 
 function Tile:getWidth()
@@ -32,10 +33,25 @@ function Tile:canQuickRemove()
   return self.age == 0
 end
 
+function Tile.getName()
+  return 'tile'
+end
+function Tile.getDescription()
+  return ''
+end
+function Tile.canInspect()
+  return false
+end
+function Tile:inspectData()
+  return {}
+end
+
 function Tile:update(dt)
   if self.placeAnim > 0 then
     self.placeAnim = math.max(self.placeAnim - dt / 0.2)
   end
+  self.hover:update(dt)
+  self.hover:set(0)
 end
 
 function Tile:placed(x, y, z, angle, anim)
@@ -74,8 +90,20 @@ function Tile:draw()
     --love.graphics.setShader(assets.shaders.colorize)
     --love.graphics.setColor(1, 1, 1, inSine(self.placeAnim * 0.4))
   end
-  love.graphics.setColor(1, 1, 1)
+
+  love.graphics.setColor(1, 1, 1, 1)
+
+  if self.hover.eased > 0.01 then
+    love.graphics.setShader(assets.shaders.colorize)
+    love.graphics.push() love.graphics.translate(-1 * self.hover.eased, 0) self:drawInner() love.graphics.pop()
+    love.graphics.push() love.graphics.translate(1 * self.hover.eased, 0) self:drawInner() love.graphics.pop()
+    love.graphics.push() love.graphics.translate(0, -1 * self.hover.eased) self:drawInner() love.graphics.pop()
+    love.graphics.push() love.graphics.translate(0, 1 * self.hover.eased) self:drawInner() love.graphics.pop()
+    love.graphics.setShader()
+  end
+
   self:drawInner()
+
   if self.placeAnim > 0 then
     --love.graphics.setShader()
     love.graphics.pop()

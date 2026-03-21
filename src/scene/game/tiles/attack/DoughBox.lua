@@ -25,6 +25,25 @@ function DoughBox:__init(angle)
   Rotatable.__init(self, angle)
 
   self.doughTimer = 4
+
+  self.statDough = 0
+  self.statDoughWave = 0
+end
+
+function DoughBox.getName()
+  return 'Dough Box'
+end
+function DoughBox.getDescription()
+  return 'Acts as a supply of dough. Don\'t ask where the dough comes from.'
+end
+function DoughBox.canInspect()
+  return true
+end
+function DoughBox:inspectData()
+  return {
+    { 'Dough Timer', (round(self.doughTimer * 10) / 10) .. 's' },
+    { 'Total Dough', self.statDoughWave, total = self.statDough },
+  }
 end
 
 function DoughBox:canPullFromSide(side)
@@ -35,6 +54,8 @@ function DoughBox:pullItem()
   self.doughTimer = self.doughTimer - 1
   local item = Item('dough')
   item:playSpawnAnim()
+  self.statDough = self.statDough + 1
+  self.statDoughWave = self.statDoughWave + 1
   return item
 end
 
